@@ -4,6 +4,44 @@ A production-grade, web-based examination and testing platform built with determ
 
 ---
 
+## 📥 First-Time Setup (After Cloning)
+
+If you or a teammate cloned this repository, follow these setup steps:
+
+### Prerequisites
+- **Node.js**: v18+ or v20+ installed ([Download Node.js](https://nodejs.org/))
+- **MongoDB**: Running locally at `mongodb://127.0.0.1:27017` (MongoDB Community Server or Compass)
+
+---
+
+### Step-by-Step Setup
+
+```bash
+# 1. Open the project folder
+cd ExamCenter
+
+# 2. Copy the example environment file
+cp .env.example .env        # Linux/macOS
+copy .env.example .env      # Windows PowerShell/CMD
+
+# 3. Install ALL dependencies across workspaces
+npm install
+```
+
+> ⚠️ **IMPORTANT**: Run **`npm install`** (or `npm i`), **NOT** `npm init`.
+> - **`npm init`** only creates a brand new blank `package.json` file. It does **NOT** download `node_modules`!
+> - **`npm install`** reads the project's `package.json` and automatically downloads all dependencies for the shared contracts, server, and client.
+
+```bash
+# 4. Build shared contracts & seed demo admin + exams
+npm run seed
+
+# 5. Start the development server
+npm run dev
+```
+
+---
+
 ## 🚀 Quick Start (Commands to Run)
 
 From the `ExamCenter/` root directory:
