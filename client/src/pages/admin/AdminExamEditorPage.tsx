@@ -58,6 +58,7 @@ export const AdminExamEditorPage: React.FC = () => {
   const [showAnswersAfterSubmit, setShowAnswersAfterSubmit] = useState(true);
 
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
+  const [examSaveSuccess, setExamSaveSuccess] = useState<string | null>(null);
   const [isSavingExam, setIsSavingExam] = useState(false);
   const [savedExamId, setSavedExamId] = useState<string | null>(isNew ? null : id);
 
@@ -127,15 +128,23 @@ export const AdminExamEditorPage: React.FC = () => {
   }, [subjects, subjectId]);
 
   // Save Exam (Basic details & rules)
-  const handleSaveExam = async (e?: React.FormEvent) => {
+  const handleSaveExam = async (e?: React.FormEvent): Promise<boolean> => {
     if (e) e.preventDefault();
     setExamSaveError(null);
+    setExamSaveSuccess(null);
     setIsSavingExam(true);
 
     try {
+      if (!title.trim()) {
+        throw new Error("Exam title is required.");
+      }
+      if (!subjectId) {
+        throw new Error("Please select a subject.");
+      }
+
       const payload: CreateExamDto = {
         subjectId,
-        title,
+        title: title.trim(),
         slug: slug.trim() || undefined,
         description: description.trim() || undefined,
         instructions,
@@ -151,26 +160,51 @@ export const AdminExamEditorPage: React.FC = () => {
       };
 
       if (savedExamId) {
-        await api.exams.updateExam(savedExamId, payload);
+        const updated = await api.exams.updateExam(savedExamId, payload);
+        if (updated.slug) setSlug(updated.slug);
       } else {
         const created = await api.exams.createExam(payload);
         setSavedExamId(created.id);
+        if (created.slug) setSlug(created.slug);
         navigate(`/admin/exams/${created.id}/edit`, { replace: true });
       }
       queryClient.invalidateQueries({ queryKey: ["admin-exams"] });
-      alert("Exam configuration saved successfully.");
+      setExamSaveSuccess("Exam configuration saved successfully.");
+      setTimeout(() => setExamSaveSuccess(null), 4000);
+      return true;
     } catch (err: any) {
       setExamSaveError(err.message || "Failed to save exam details");
+      return false;
     } finally {
       setIsSavingExam(false);
     }
   };
 
+  const handleTabClick = async (tab: "details" | "rules" | "questions" | "publish") => {
+    if (tab === activeTab) return;
+    if ((tab === "questions" || tab === "publish") && !savedExamId) {
+      if (!title.trim() || !subjectId) {
+        setExamSaveError("Please provide an Exam Title and Subject first before proceeding to questions or publish.");
+        setActiveTab("details");
+        return;
+      }
+      const ok = await handleSaveExam();
+      if (!ok) return;
+    }
+    setActiveTab(tab);
+  };
+
   // Open Question Modal
-  const handleOpenAddQuestion = () => {
-    if (!savedExamId) {
-      alert("Please save the basic exam details first before adding questions.");
-      return;
+  const handleOpenAddQuestion = async () => {
+    let currentId = savedExamId;
+    if (!currentId) {
+      if (!title.trim() || !subjectId) {
+        setExamSaveError("Please complete basic exam details (Title and Subject) first before adding questions.");
+        setActiveTab("details");
+        return;
+      }
+      const ok = await handleSaveExam();
+      if (!ok) return;
     }
     setEditingQuestion(null);
     setQText("");
@@ -184,6 +218,20 @@ export const AdminExamEditorPage: React.FC = () => {
     setQCorrectOptionId("opt_1");
     setQuestionError(null);
     setIsQuestionModalOpen(true);
+  };
+
+  const handleOpenBulkImport = async () => {
+    let currentId = savedExamId;
+    if (!currentId) {
+      if (!title.trim() || !subjectId) {
+        setExamSaveError("Please complete basic exam details (Title and Subject) first before importing questions.");
+        setActiveTab("details");
+        return;
+      }
+      const ok = await handleSaveExam();
+      if (!ok) return;
+    }
+    setIsBulkModalOpen(true);
   };
 
   const handleOpenEditQuestion = (q: AdminQuestionDto) => {
@@ -320,6 +368,7 @@ export const AdminExamEditorPage: React.FC = () => {
         </p>
       </div>
 
+      {examSaveSuccess && <Alert type="success" message={examSaveSuccess} />}
       {examSaveError && <Alert type="danger" message={examSaveError} />}
 
       {/* Step Navigation Tabs */}
@@ -332,7 +381,7 @@ export const AdminExamEditorPage: React.FC = () => {
         }}
       >
         <button
-          onClick={() => setActiveTab("details")}
+          onClick={() => handleTabClick("details")}
           style={{
             padding: "0.75rem 1.25rem",
             fontWeight: activeTab === "details" ? "700" : "500",
@@ -347,7 +396,7 @@ export const AdminExamEditorPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("rules")}
+          onClick={() => handleTabClick("rules")}
           style={{
             padding: "0.75rem 1.25rem",
             fontWeight: activeTab === "rules" ? "700" : "500",
@@ -362,7 +411,7 @@ export const AdminExamEditorPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("questions")}
+          onClick={() => handleTabClick("questions")}
           style={{
             padding: "0.75rem 1.25rem",
             fontWeight: activeTab === "questions" ? "700" : "500",
@@ -377,7 +426,7 @@ export const AdminExamEditorPage: React.FC = () => {
         </button>
 
         <button
-          onClick={() => setActiveTab("publish")}
+          onClick={() => handleTabClick("publish")}
           style={{
             padding: "0.75rem 1.25rem",
             fontWeight: activeTab === "publish" ? "700" : "500",
@@ -508,13 +557,16 @@ export const AdminExamEditorPage: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "1.5rem" }}>
               <button
                 type="button"
-                onClick={() => {
-                  handleSaveExam();
+                disabled={isSavingExam}
+                onClick={async () => {
+                  if (title.trim() && subjectId) {
+                    await handleSaveExam();
+                  }
                   setActiveTab("rules");
                 }}
                 className="btn btn-primary"
               >
-                Save & Proceed to Rules
+                {isSavingExam ? "Saving..." : "Proceed to Rules →"}
               </button>
             </div>
           </div>
@@ -649,13 +701,21 @@ export const AdminExamEditorPage: React.FC = () => {
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2rem" }}>
               <button
                 type="button"
-                onClick={() => {
-                  handleSaveExam();
-                  setActiveTab("questions");
+                disabled={isSavingExam}
+                onClick={async () => {
+                  if (!title.trim() || !subjectId) {
+                    setExamSaveError("Please enter an Exam Title and select a Subject before managing questions.");
+                    setActiveTab("details");
+                    return;
+                  }
+                  const ok = await handleSaveExam();
+                  if (ok) {
+                    setActiveTab("questions");
+                  }
                 }}
                 className="btn btn-primary"
               >
-                Save & Manage Questions
+                {isSavingExam ? "Saving Exam..." : "Save & Manage Questions →"}
               </button>
             </div>
           </div>
@@ -665,6 +725,15 @@ export const AdminExamEditorPage: React.FC = () => {
       {/* Tab 3: Questions Manager */}
       {activeTab === "questions" && (
         <div>
+          {!savedExamId && (
+            <div style={{ marginBottom: "1.25rem" }}>
+              <Alert
+                type="warning"
+                message="Basic exam details need to be saved first so questions can be associated with the exam. Click 'Add Question' or 'Bulk Import' to automatically save and proceed."
+              />
+            </div>
+          )}
+
           {/* Running Totals Bar */}
           <div
             style={{
@@ -694,13 +763,7 @@ export const AdminExamEditorPage: React.FC = () => {
             <div style={{ display: "flex", gap: "0.5rem" }}>
               <button
                 type="button"
-                onClick={() => {
-                  if (!savedExamId) {
-                    alert("Please save the basic exam details first before importing questions.");
-                    return;
-                  }
-                  setIsBulkModalOpen(true);
-                }}
+                onClick={handleOpenBulkImport}
                 className="btn btn-secondary btn-sm"
               >
                 <Upload size={16} /> Bulk Import Questions
@@ -724,13 +787,7 @@ export const AdminExamEditorPage: React.FC = () => {
               <div style={{ display: "flex", justifyContent: "center", gap: "0.75rem", flexWrap: "wrap" }}>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!savedExamId) {
-                      alert("Please save the basic exam details first.");
-                      return;
-                    }
-                    setIsBulkModalOpen(true);
-                  }}
+                  onClick={handleOpenBulkImport}
                   className="btn btn-secondary"
                 >
                   <Upload size={18} /> Bulk Import Questions

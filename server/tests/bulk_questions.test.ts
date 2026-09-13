@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import mongoose from "mongoose";
+import bcrypt from "bcrypt";
 import { createApp } from "../src/app.js";
 import { config } from "../src/config/index.js";
 import { UserModel } from "../src/modules/users/user.model.js";
@@ -10,7 +11,7 @@ import { QuestionModel } from "../src/modules/questions/question.model.js";
 
 describe("Bulk Question Import API", () => {
   const app = createApp();
-  let adminCookie: string[];
+  let adminCookie: string | string[];
   let testSubjectId: string;
   let testExamId: string;
   let adminUserId: mongoose.Types.ObjectId;
@@ -31,7 +32,7 @@ describe("Bulk Question Import API", () => {
         admin = await UserModel.create({
           name: config.ADMIN_INITIAL_NAME,
           email: config.ADMIN_INITIAL_EMAIL,
-          passwordHash: await UserModel.hashPassword(config.ADMIN_INITIAL_PASSWORD),
+          passwordHash: await bcrypt.hash(config.ADMIN_INITIAL_PASSWORD, 10),
           role: "admin",
         });
       }
@@ -39,10 +40,10 @@ describe("Bulk Question Import API", () => {
         email: config.ADMIN_INITIAL_EMAIL,
         password: config.ADMIN_INITIAL_PASSWORD,
       });
-      adminCookie = retryLogin.headers["set-cookie"];
+      adminCookie = retryLogin.headers["set-cookie"] as string | string[];
       adminUserId = admin._id;
     } else {
-      adminCookie = loginRes.headers["set-cookie"];
+      adminCookie = loginRes.headers["set-cookie"] as string | string[];
       const admin = await UserModel.findOne({ email: config.ADMIN_INITIAL_EMAIL });
       adminUserId = admin!._id;
     }

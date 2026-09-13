@@ -20,10 +20,24 @@ class ExamService {
         if (!subject) {
             throw errors_js_1.AppError.notFound("Subject not found");
         }
-        const slug = data.slug ? slugify(data.slug) : slugify(data.title);
-        const existing = await exam_model_js_1.ExamModel.findOne({ slug });
-        if (existing) {
-            throw errors_js_1.AppError.conflict("An exam with this slug already exists");
+        let slug = data.slug ? slugify(data.slug) : slugify(data.title);
+        if (!slug) {
+            slug = `exam-${Date.now()}`;
+        }
+        if (data.slug) {
+            const existing = await exam_model_js_1.ExamModel.findOne({ slug });
+            if (existing) {
+                throw errors_js_1.AppError.conflict(`An exam with the slug '${slug}' already exists. Please choose a different slug.`);
+            }
+        }
+        else {
+            let uniqueSlug = slug;
+            let counter = 1;
+            while (await exam_model_js_1.ExamModel.findOne({ slug: uniqueSlug })) {
+                counter++;
+                uniqueSlug = `${slug}-${counter}`;
+            }
+            slug = uniqueSlug;
         }
         const exam = await exam_model_js_1.ExamModel.create({
             ...data,
